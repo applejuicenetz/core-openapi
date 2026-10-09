@@ -196,7 +196,8 @@ paths:
       operationId: getDirectory
       description: 'Remote-Dateisystem des Core, nicht der GUI. Unter Unix sind name/isfilesystem/type immer
         da, path meist nicht; GUI setzt name relativ zusammen. Windows-Shell-Pfade können :: enthalten und
-        dir verschachteln.'
+        dir verschachteln. Betriebssystem-Metadatenordner wie $RECYCLE.BIN, System Volume Information,
+        lost+found oder .Trashes werden nicht aufgelistet (gleiche Namensliste wie beim Sharecheck).'
       parameters:
       - name: directory
         in: query
