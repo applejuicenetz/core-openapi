@@ -1,0 +1,49 @@
+name: Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'openapi.yaml'
+      - 'redocly.yaml'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Lint
+        run: npx --yes @redocly/cli@2.57.0 lint openapi.yaml --config redocly.yaml
+
+      - name: ReDoc bauen
+        run: |
+          mkdir site
+          cp openapi.yaml site/openapi.yaml
+          npx --yes @redocly/cli@2.57.0 build-docs openapi.yaml -o site/index.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

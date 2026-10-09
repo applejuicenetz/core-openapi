@@ -1,0 +1,4523 @@
+openapi: 3.0.3
+info:
+  title: appleJuice Core HTTP/XML API
+  version: 0.1.0
+  description: 'Quellcodebasierte Dokumentation aller 9 XML-Abfragen, 16 Aktionspfade und 3 öffentlichen HTML-Pfade
+    des Core. Kein REST-Gateway. GET, POST und OPTIONS beschrieben; OPTIONS auf beliebigen Pfaden vor Authentifizierung
+    behandelt. Andere HTTP-Methoden werden ebenfalls nicht verworfen, haben außer OPTIONS aber keine
+    eigene Semantik und sind nicht empfohlen.
+
+
+    Standardport 9851. TCP-Verbindungen von genau 127.0.0.1 sind auch bei leerem Core-Passwort erlaubt; andere
+    Adressen nur bei gesetztem Passwort. Das ersetzt keine HTTP-Authentifizierung: password
+    muss MD5 des Passworts sein, auch MD5 des leeren Passworts bei localhost. Empfohlen ist der Header
+    X-AppleJuice-Password; ohne Header bleibt der Parameter password in Query oder POST-Form gültig.
+    Ein vorhandener Header hat immer Vorrang, auch wenn er leer oder falsch ist. Basic/Bearer/Cookie-Auth werden
+    nicht für die Core-API verwendet. Der Core hat keinen eingebauten TLS-Listener. Passworthash ist ein wiederverwendbares
+    Geheimnis: nicht loggen, nicht öffentlich im URL-Beispiel verwenden. Remote nur über geschützten Transport
+    verwenden.
+
+
+    Pfadsegmente und Parameternamen case-insensitive. Werte URL-dekodiert (UTF-8, ''+'' wird Leerzeichen),
+    Parameternamen nicht URL-dekodiert. Wiederholte Namen: letzter Wert gewinnt, POST-Form überschreibt Query.
+    Paare ohne ''='' ignoriert. Ausgewertet werden nur erste 1 bzw. 2 Pfadsegmente, zusätzliche Segmente werden
+    nicht validiert. Unbekannter Pfad mit gültigem Passwort: 302 /help; ohne gültiges Passwort: 302 /wrongpassword.
+    Leere und fehlerhafte Pfade können Verbindungsabbrüche statt HTTP-Fehlern erzeugen.
+
+
+    Antworten: text/xml für XML und manche Klartexte; text/html für andere Klartexte und HTML. Funktionale
+    Fehler meist 200, Auth/Session-Fehler 302 unknown mit leerem Körper, keine 401/404. Redirects nicht automatisch
+    als Erfolg behandeln. Ungefangene Ausnahmen können die TCP-Verbindung ohne Antwort schließen; ein HTTP-500
+    ist dann nicht garantiert. Malformierte HTTP-Requestline wird mit 500 beantwortet. Response-Header
+    nutzen LF statt standardmäßiger CRLF. XML-Bytes nutzen den Standardzeichensatz der Laufzeit, Requestwerte UTF-8; typischerweise
+    UTF-8, nicht durch XML-Deklaration/Content-Type erzwungen.
+
+
+    mode=zip (case-insensitive): zlib-Stream, kein ZIP/gzip und kein Content-Encoding. Falls
+    der Core Content-Type gesetzt hat, wird er zu application/zlib umgeschrieben, auch bei Klartext. Andernfalls
+    setzt HTTP-Schicht nachher text/html, obwohl Körper komprimiert ist. OPTIONS kehrt vor Umschreibung zurück,
+    behält text/plain. Die komprimierten Varianten stehen in den Antwortschemas; statische Swagger/ReDoc-Beispiele
+    modellieren Bytes nicht als XML.
+
+
+    OpenAPI-Grenzen: offene Indexparameter id1..idN/sharedirectory1..N/sharesub1..N können nicht als endliche
+    Parameterliste beschrieben werden; id1/sharedirectory1/sharesub1 sind Stellvertreter, x-core-indexed-parameters
+    erklärt Iteration. POST-Passwort im Formkörper wird akzeptiert, während apiKey-Security für den empfohlenen
+    Header- oder kompatiblen Query-Transport steht (x-core-form-password-supported). Gemischte XML-Geschwisterreihenfolge, teilweise
+    kaputtes XML nach Laufzeitfehlern und Verbindungsabbrüche bleiben textuell beschrieben. Kein generierter
+    Client darf daraus eine moderne fehlerfreie REST-Semantik ableiten.'
+servers:
+- url: http://127.0.0.1:{port}
+  description: Lokaler Core; Host/Port an eigene Installation anpassen.
+  variables:
+    port:
+      default: '9851'
+      description: XML-Port aus Core-Settings.
+security:
+- PasswordHeader: []
+- PasswordQuery: []
+tags:
+- name: query
+  description: XML-Abfragen; Session- und Delta-Synchronisation.
+- name: function
+  description: Zustandsänderungen auch per GET; nicht automatisch wiederholen.
+- name: http
+  description: Öffentliche Hilfsseiten und CORS-Preflight.
+paths:
+  /xml/information.xml:
+    get:
+      tags:
+      - query
+      summary: Statische Core-Informationen
+      operationId: getInformation
+      description: Statische Core-Informationen
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getInformationResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Statische Core-Informationen (POST)
+      operationId: getInformationPost
+      description: 'Statische Core-Informationen
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getInformationResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getInformationOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/getsession.xml:
+    get:
+      tags:
+      - query
+      summary: Neue Session erzeugen
+      operationId: getSession
+      description: Neue zufällige ID; getrennte Session je GUI. Session ist kein Ersatz für password. Für Löschlisten
+        mit modified.xml verwenden; IDs nicht dauerhaft speichern.
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getSessionResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Neue Session erzeugen (POST)
+      operationId: getSessionPost
+      description: 'Neue zufällige ID; getrennte Session je GUI. Session ist kein Ersatz für password. Für
+        Löschlisten mit modified.xml verwenden; IDs nicht dauerhaft speichern.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getSessionResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getSessionOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/directory.xml:
+    get:
+      tags:
+      - query
+      summary: Verzeichnisse im Core-Dateisystem
+      operationId: getDirectory
+      description: 'Remote-Dateisystem des Core, nicht der GUI. Unter Unix sind name/isfilesystem/type immer
+        da, path meist nicht; GUI setzt name relativ zusammen. Windows-Shell-Pfade können :: enthalten und
+        dir verschachteln.'
+      parameters:
+      - name: directory
+        in: query
+        required: false
+        description: 'Elternverzeichnis; fehlend: Dateisystemwurzeln unter Unix, Desktop/Laufwerke unter Windows.'
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getDirectoryResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Verzeichnisse im Core-Dateisystem (POST)
+      operationId: getDirectoryPost
+      description: 'Remote-Dateisystem des Core, nicht der GUI. Unter Unix sind name/isfilesystem/type immer
+        da, path meist nicht; GUI setzt name relativ zusammen. Windows-Shell-Pfade können :: enthalten und
+        dir verschachteln.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - name: directory
+        in: query
+        required: false
+        description: 'Elternverzeichnis; fehlend: Dateisystemwurzeln unter Unix, Desktop/Laufwerke unter Windows.'
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getDirectoryResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                directory:
+                  type: string
+                  description: 'Elternverzeichnis; fehlend: Dateisystemwurzeln unter Unix, Desktop/Laufwerke
+                    unter Windows.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getDirectoryOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/downloadpartlist.xml:
+    get:
+      tags:
+      - query
+      summary: Verfügbarkeit der Teile eines Downloads
+      operationId: getDownloadpartlist
+      description: Verfügbarkeit der Teile eines Downloads
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getDownloadpartlistResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Verfügbarkeit der Teile eines Downloads (POST)
+      operationId: getDownloadpartlistPost
+      description: 'Verfügbarkeit der Teile eines Downloads
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getDownloadpartlistResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getDownloadpartlistOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/userpartlist.xml:
+    get:
+      tags:
+      - query
+      summary: Verfügbarkeit der Teile einer Quelle
+      operationId: getUserpartlist
+      description: Verfügbarkeit der Teile einer Quelle
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getUserpartlistResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Verfügbarkeit der Teile einer Quelle (POST)
+      operationId: getUserpartlistPost
+      description: 'Verfügbarkeit der Teile einer Quelle
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getUserpartlistResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getUserpartlistOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/getobject.xml:
+    get:
+      tags:
+      - query
+      summary: Ein Objekt nach ID
+      operationId: getObject
+      description: Alle Objekttypen mit ID einschließlich Share, Information und NetworkInfo. ID muss >0 sein.
+        information/networkinfo haben selbst kein id-Attribut. Information-/NetworkInfo-IDs stehen nicht in
+        ids; keine festen ID-Nummern voraussetzen.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getObjectResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Ein Objekt nach ID (POST)
+      operationId: getObjectPost
+      description: 'Alle Objekttypen mit ID einschließlich Share, Information und NetworkInfo. ID muss >0 sein.
+        information/networkinfo haben selbst kein id-Attribut. Information-/NetworkInfo-IDs stehen nicht in
+        ids; keine festen ID-Nummern voraussetzen.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getObjectResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getObjectOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/share.xml:
+    get:
+      tags:
+      - query
+      summary: Alle freigegebenen Dateien
+      operationId: getShares
+      description: Vollständige Liste, kein timestamp-Delta. Kann auch die vom Core automatisch freigegebene
+        eigene JAR enthalten.
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getSharesResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Alle freigegebenen Dateien (POST)
+      operationId: getSharesPost
+      description: 'Vollständige Liste, kein timestamp-Delta. Kann auch die vom Core automatisch freigegebene
+        eigene JAR enthalten.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getSharesResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getSharesOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/settings.xml:
+    get:
+      tags:
+      - query
+      summary: Core-Einstellungen lesen
+      operationId: getSettings
+      description: Core-Einstellungen lesen
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getSettingsResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Core-Einstellungen lesen (POST)
+      operationId: getSettingsPost
+      description: 'Core-Einstellungen lesen
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getSettingsResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getSettingsOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /xml/modified.xml:
+    get:
+      tags:
+      - query
+      summary: Änderungen und Zustandslisten abfragen
+      operationId: getModified
+      description: Delta-Polling nach Objekt-Änderungszeit (>=). Ausgabe-Reihenfolge nicht zugesichert. timestamp=0
+        erzeugt Grundbestand, time liefert nächsten Poll-Zeitpunkt. Share-Objekte fehlen immer; separat share.xml.
+        Mit Session liefert ids-Filter removed und leert dessen Queue; ohne Session Bestandslisten. Filterunabhängig
+        werden keine Löschlisten gesendet, wenn ids nicht angefordert wird. Informationsobjekte und Netzwerkstatistik
+        werden jede Sekunde aktualisiert (Raten über tatsächlich verstrichene Zeit, Bytes/Sekunde). Ohne filter werden alle Kategorien gesendet, filter='' sendet nur time.
+        Abfragen nach Session-Timeout neu initialisieren; kein Snapshot-/Replay-/Exactly-once-Versprechen.
+      parameters:
+      - $ref: '#/components/parameters/Timestamp'
+      - $ref: '#/components/parameters/Session'
+      - $ref: '#/components/parameters/Filter'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getModifiedResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - query
+      summary: Änderungen und Zustandslisten abfragen (POST)
+      operationId: getModifiedPost
+      description: 'Delta-Polling nach Objekt-Änderungszeit (>=). Ausgabe-Reihenfolge nicht zugesichert. timestamp=0
+        erzeugt Grundbestand, time liefert nächsten Poll-Zeitpunkt. Share-Objekte fehlen immer; separat share.xml.
+        Mit Session liefert ids-Filter removed und leert dessen Queue; ohne Session Bestandslisten. Filterunabhängig
+        werden keine Löschlisten gesendet, wenn ids nicht angefordert wird. Informationsobjekte und Netzwerkstatistik
+        werden jede Sekunde aktualisiert (Raten über tatsächlich verstrichene Zeit, Bytes/Sekunde). Ohne filter werden alle Kategorien gesendet, filter='''' sendet nur
+        time. Abfragen nach Session-Timeout neu initialisieren; kein Snapshot-/Replay-/Exactly-once-Versprechen.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Timestamp'
+      - $ref: '#/components/parameters/Session'
+      - $ref: '#/components/parameters/Filter'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/getModifiedResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                timestamp:
+                  type: integer
+                  format: int64
+                  default: 0
+                  description: Millisekunden seit Unix-Epoche; ungültig/fehlend = 0. Objekte mit Änderungszeit
+                    >= timestamp (inklusiv). time der letzten Antwort beim nächsten Poll senden.
+                session:
+                  type: integer
+                  format: int64
+                  description: Optional. Gültige Session-ID ersetzt ids durch removed. An IPv4-Adresse gebunden;
+                    Cleanup alle 5 s bei >30 s ohne validierten Zugriff. Nichtnumerisch wird wie keine Session
+                    behandelt, unbekannte numerische ID ergibt 302 /wrongsession. Nur modified.xml hält die
+                    Session am Leben.
+                filter:
+                  type: string
+                  description: 'Case-insensitive, durch Semikolon getrennt: ids, down, user, uploads, server,
+                    informations, search. Fehlt filter, werden alle Kategorien geliefert; leer/unbekannt =
+                    nur time. informations (Plural!) umfasst information und networkinfo; search auch searchentry.
+                    ids enthält Bestands- oder Löschlisten unabhängig vom timestamp.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: getModifiedOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/canceldownload:
+    get:
+      tags:
+      - function
+      summary: Downloads abbrechen
+      operationId: canceldownload
+      description: Nur Download-IDs. Ein ladender Download (0) wird zuerst pausiert. Aus 0, 1, 16 und 18 wechselt er zu 15 (abbrechen) und wird asynchron zu 17 (abgebrochen); Quellen und der Part-Datei-Share fallen weg. Fertige (14) und bereits abgebrochene Downloads bleiben, die Antwort ist trotzdem ok. id plus fortlaufende id1..idN; keine atomare Mehrfachoperation.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/canceldownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+    post:
+      tags:
+      - function
+      summary: Downloads abbrechen (POST)
+      operationId: canceldownloadPost
+      description: 'Nur Download-IDs. Ein ladender Download (0) wird zuerst pausiert. Aus 0, 1, 16 und 18 wechselt er zu 15 (abbrechen) und wird asynchron zu 17 (abgebrochen); Quellen und der Part-Datei-Share fallen weg. Fertige (14) und bereits abgebrochene Downloads bleiben, die Antwort ist trotzdem ok. id plus fortlaufende id1..idN; keine atomare Mehrfachoperation. Auch
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/canceldownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                id1:
+                  type: integer
+                  format: int64
+                  description: Fortlaufend id1, id2, ...; Stopp bei erster Lücke. Nicht Array id=1&id=2. Nichtnumerische
+                    Werte werden übersprungen. Antworten werden ohne Trenner verkettet. id ist nicht zwingend,
+                    id1 allein funktioniert.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+              additionalProperties:
+                type: string
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: canceldownloadOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/pausedownload:
+    get:
+      tags:
+      - function
+      summary: Downloads pausieren
+      operationId: pausedownload
+      description: Nur Download-IDs. Wirkt nur bei Status 0 (lädt/sucht) und setzt 18 (pausiert); andere Status bleiben, die Antwort ist trotzdem ok. id plus fortlaufende id1..idN; keine atomare Mehrfachoperation.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/pausedownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+    post:
+      tags:
+      - function
+      summary: Downloads pausieren (POST)
+      operationId: pausedownloadPost
+      description: 'Nur Download-IDs. Wirkt nur bei Status 0 (lädt/sucht) und setzt 18 (pausiert); andere Status bleiben, die Antwort ist trotzdem ok. id plus fortlaufende id1..idN; keine atomare Mehrfachoperation. Auch
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/pausedownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                id1:
+                  type: integer
+                  format: int64
+                  description: Fortlaufend id1, id2, ...; Stopp bei erster Lücke. Nicht Array id=1&id=2. Nichtnumerische
+                    Werte werden übersprungen. Antworten werden ohne Trenner verkettet. id ist nicht zwingend,
+                    id1 allein funktioniert.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+              additionalProperties:
+                type: string
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: pausedownloadOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/resumedownload:
+    get:
+      tags:
+      - function
+      summary: Downloads fortsetzen
+      operationId: resumedownload
+      description: Nur Download-IDs. Wirkt nur bei Status 18 (pausiert) und setzt 0; abgebrochene Downloads (17) werden nicht fortgesetzt, die Antwort ist trotzdem ok. id plus fortlaufende id1..idN; keine atomare Mehrfachoperation.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/resumedownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+    post:
+      tags:
+      - function
+      summary: Downloads fortsetzen (POST)
+      operationId: resumedownloadPost
+      description: 'Nur Download-IDs. Wirkt nur bei Status 18 (pausiert) und setzt 0; abgebrochene Downloads (17) werden nicht fortgesetzt, die Antwort ist trotzdem ok. id plus fortlaufende id1..idN; keine atomare Mehrfachoperation. Auch
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/resumedownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                id1:
+                  type: integer
+                  format: int64
+                  description: Fortlaufend id1, id2, ...; Stopp bei erster Lücke. Nicht Array id=1&id=2. Nichtnumerische
+                    Werte werden übersprungen. Antworten werden ohne Trenner verkettet. id ist nicht zwingend,
+                    id1 allein funktioniert.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+              additionalProperties:
+                type: string
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: resumedownloadOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/renamedownload:
+    get:
+      tags:
+      - function
+      summary: Download umbenennen
+      operationId: renameDownload
+      description: Download umbenennen
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: name
+        in: query
+        required: false
+        description: Neuer Name; darf leer sein, wird nicht auf Pfadtrenner geprüft.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/renameDownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Download umbenennen (POST)
+      operationId: renameDownloadPost
+      description: 'Download umbenennen
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: name
+        in: query
+        required: false
+        description: Neuer Name; darf leer sein, wird nicht auf Pfadtrenner geprüft.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/renameDownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                name:
+                  type: string
+                  description: Neuer Name; darf leer sein, wird nicht auf Pfadtrenner geprüft.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: renameDownloadOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/settargetdir:
+    get:
+      tags:
+      - function
+      summary: Download-Ziel relativ zu Incoming ändern
+      operationId: setTargetDir
+      description: Gedacht ist ein einzelner Verzeichnisname; geprüft werden nur .. und :. Nicht als sichere Pfadvalidierung verwenden.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: dir
+        in: query
+        required: false
+        description: Relatives Ziel; leer bedeutet Incoming selbst. Verboten sind '..' und ':', aber nicht
+          '/' oder '\'.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setTargetDirResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Download-Ziel relativ zu Incoming ändern (POST)
+      operationId: setTargetDirPost
+      description: 'Gedacht ist ein einzelner Verzeichnisname; geprüft werden nur .. und :. Nicht als sichere Pfadvalidierung verwenden.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: dir
+        in: query
+        required: false
+        description: Relatives Ziel; leer bedeutet Incoming selbst. Verboten sind '..' und ':', aber nicht
+          '/' oder '\'.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setTargetDirResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                dir:
+                  type: string
+                  description: Relatives Ziel; leer bedeutet Incoming selbst. Verboten sind '..' und ':',
+                    aber nicht '/' oder '\'.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: setTargetDirOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/setpowerdownload:
+    get:
+      tags:
+      - function
+      summary: Powerdownload für Downloads setzen
+      operationId: setPowerDownload
+      description: Powerdownload für Downloads setzen
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: powerdownload
+        in: query
+        required: false
+        description: 0 deaktiviert; 12..490 setzt Verhältnis 1:(1 + Wert/10). 1..11 und außerhalb des Bereichs
+          ändern nichts.
+        schema:
+          type: integer
+          format: int64
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setPowerDownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+    post:
+      tags:
+      - function
+      summary: Powerdownload für Downloads setzen (POST)
+      operationId: setPowerDownloadPost
+      description: 'Powerdownload für Downloads setzen
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: powerdownload
+        in: query
+        required: false
+        description: 0 deaktiviert; 12..490 setzt Verhältnis 1:(1 + Wert/10). 1..11 und außerhalb des Bereichs
+          ändern nichts.
+        schema:
+          type: integer
+          format: int64
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setPowerDownloadResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                powerdownload:
+                  type: integer
+                  format: int64
+                  description: 0 deaktiviert; 12..490 setzt Verhältnis 1:(1 + Wert/10). 1..11 und außerhalb
+                    des Bereichs ändern nichts.
+                id1:
+                  type: integer
+                  format: int64
+                  description: Fortlaufend id1, id2, ...; Stopp bei erster Lücke. Nicht Array id=1&id=2. Nichtnumerische
+                    Werte werden übersprungen. Antworten werden ohne Trenner verkettet. id ist nicht zwingend,
+                    id1 allein funktioniert.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+              additionalProperties:
+                type: string
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: setPowerDownloadOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/setpriority:
+    get:
+      tags:
+      - function
+      summary: Share-Priorität ändern
+      operationId: setPriority
+      description: Nur Share-IDs, nicht Download-/Upload-IDs. Aus getobject/share.xml beziehen.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: priority
+        in: query
+        required: false
+        description: 1..250. Summe aller Share-Prioritäten nach Änderung maximal 1000. Ungültige Werte/Summe
+          werden ignoriert, Antwort enthält alten Wert.
+        schema:
+          type: integer
+          format: int64
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setPriorityResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+    post:
+      tags:
+      - function
+      summary: Share-Priorität ändern (POST)
+      operationId: setPriorityPost
+      description: 'Nur Share-IDs, nicht Download-/Upload-IDs. Aus getobject/share.xml beziehen.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: priority
+        in: query
+        required: false
+        description: 1..250. Summe aller Share-Prioritäten nach Änderung maximal 1000. Ungültige Werte/Summe
+          werden ignoriert, Antwort enthält alten Wert.
+        schema:
+          type: integer
+          format: int64
+      - $ref: '#/components/parameters/AdditionalIds'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setPriorityResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      x-core-indexed-parameters:
+        id:
+          start: 1
+          stop: first missing index
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                priority:
+                  type: integer
+                  format: int64
+                  description: 1..250. Summe aller Share-Prioritäten nach Änderung maximal 1000. Ungültige
+                    Werte/Summe werden ignoriert, Antwort enthält alten Wert.
+                id1:
+                  type: integer
+                  format: int64
+                  description: Fortlaufend id1, id2, ...; Stopp bei erster Lücke. Nicht Array id=1&id=2. Nichtnumerische
+                    Werte werden übersprungen. Antworten werden ohne Trenner verkettet. id ist nicht zwingend,
+                    id1 allein funktioniert.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+              additionalProperties:
+                type: string
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: setPriorityOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/cleandownloadlist:
+    get:
+      tags:
+      - function
+      summary: Beendete Downloads entfernen
+      operationId: cleanDownloadList
+      description: 'Entfernt Downloads mit Status 13 (Fehler beim Fertigstellen), 14 (fertig) und 17 (abgebrochen)
+        samt ihren Quellen. Laufende, pausierte und im Abbruch befindliche (15) Downloads bleiben.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/cleanDownloadListResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Beendete Downloads entfernen (POST)
+      operationId: cleanDownloadListPost
+      description: 'Entfernt Downloads mit Status 13 (Fehler beim Fertigstellen), 14 (fertig) und 17 (abgebrochen)
+        samt ihren Quellen. Laufende, pausierte und im Abbruch befindliche (15) Downloads bleiben.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/cleanDownloadListResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: cleanDownloadListOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/cancelsearch:
+    get:
+      tags:
+      - function
+      summary: Suche abbrechen
+      operationId: cancelSearch
+      description: Nur Search-ID, nicht SearchEntry. Laufende Suche beenden; Ergebnisse können im Bestand bleiben.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/cancelSearchResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Suche abbrechen (POST)
+      operationId: cancelSearchPost
+      description: 'Nur Search-ID, nicht SearchEntry. Laufende Suche beenden; Ergebnisse können im Bestand
+        bleiben.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/cancelSearchResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: cancelSearchOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/search:
+    get:
+      tags:
+      - function
+      summary: Textsuche starten
+      operationId: startSearch
+      description: Textsuche starten
+      parameters:
+      - name: search
+        in: query
+        required: false
+        description: Suchtext. Leer wird abgelehnt. URL-encoden, insbesondere & und +.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/startSearchResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Textsuche starten (POST)
+      operationId: startSearchPost
+      description: 'Textsuche starten
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - name: search
+        in: query
+        required: false
+        description: Suchtext. Leer wird abgelehnt. URL-encoden, insbesondere & und +.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/startSearchResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: string
+                  description: Suchtext. Leer wird abgelehnt. URL-encoden, insbesondere & und +.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: startSearchOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/serverlogin:
+    get:
+      tags:
+      - function
+      summary: Server-Verbindung anstoßen
+      operationId: serverLogin
+      description: Asynchron; ok bestätigt keine bestehende Netzwerkverbindung. networkinfo.connectedwithserverid/tryconnecttoserver
+        abfragen.
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/serverLoginResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Server-Verbindung anstoßen (POST)
+      operationId: serverLoginPost
+      description: 'Asynchron; ok bestätigt keine bestehende Netzwerkverbindung. networkinfo.connectedwithserverid/tryconnecttoserver
+        abfragen.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/serverLoginResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: serverLoginOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/removeserver:
+    get:
+      tags:
+      - function
+      summary: Nicht verwendeten Server entfernen
+      operationId: removeServer
+      description: Nicht verwendeten Server entfernen
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/removeServerResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Nicht verwendeten Server entfernen (POST)
+      operationId: removeServerPost
+      description: 'Nicht verwendeten Server entfernen
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Id'
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/removeServerResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                  description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für
+                    erfolgreichen Aufruf positive passende Objekt-ID verwenden.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: removeServerOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/processlink:
+    get:
+      tags:
+      - function
+      summary: ajfsp-Link verarbeiten
+      operationId: processLink
+      description: ajfsp-Link verarbeiten
+      parameters:
+      - name: link
+        in: query
+        required: false
+        description: 'ajfsp://file|Name|MD5|Bytegröße[|Quellen...]/ oder ajfsp://server|Host|Port/. Ein abschließendes
+          / wird entfernt. Quellen: ip:port oder ip:port:ip:port; einzelne ungültige Quellen werden übersprungen.
+          Gesamten Link als Query-/Formwert URL-encoden.'
+        schema:
+          type: string
+      - name: subdir
+        in: query
+        required: false
+        description: 'Ziel relativ zu Incoming für neuen Download. Bestehender Download wird nicht umgestellt.
+          Der Wert wird ohne die ..-/: Prüfung von settargetdir.'
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/processLinkResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: ajfsp-Link verarbeiten (POST)
+      operationId: processLinkPost
+      description: 'ajfsp-Link verarbeiten
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - name: link
+        in: query
+        required: false
+        description: 'ajfsp://file|Name|MD5|Bytegröße[|Quellen...]/ oder ajfsp://server|Host|Port/. Ein abschließendes
+          / wird entfernt. Quellen: ip:port oder ip:port:ip:port; einzelne ungültige Quellen werden übersprungen.
+          Gesamten Link als Query-/Formwert URL-encoden.'
+        schema:
+          type: string
+      - name: subdir
+        in: query
+        required: false
+        description: 'Ziel relativ zu Incoming für neuen Download. Bestehender Download wird nicht umgestellt.
+          Der Wert wird ohne die ..-/: Prüfung von settargetdir.'
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/processLinkResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                link:
+                  type: string
+                  description: 'ajfsp://file|Name|MD5|Bytegröße[|Quellen...]/ oder ajfsp://server|Host|Port/.
+                    Ein abschließendes / wird entfernt. Quellen: ip:port oder ip:port:ip:port; einzelne ungültige
+                    Quellen werden übersprungen. Gesamten Link als Query-/Formwert URL-encoden.'
+                subdir:
+                  type: string
+                  description: 'Ziel relativ zu Incoming für neuen Download. Bestehender Download wird nicht
+                    umgestellt. Der Wert wird ohne die ..-/: Prüfung von settargetdir.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: processLinkOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/setpassword:
+    get:
+      tags:
+      - function
+      summary: Core-Passworthash ändern
+      operationId: setPassword
+      description: Ändert Zugangsdaten. Leerer Hash (MD5 von leerem Passwort) sperrt danach neue Nicht-Loopback-Verbindungen.
+        Nicht mit Beispielwerten ausführen.
+      parameters:
+      - name: newpassword
+        in: query
+        required: false
+        description: Neuer MD5-Hash, 32 Hex-Zeichen. Kein Klartextpasswort. Setter speichert nicht explizit in settings.xml; persistierte Settings später prüfen.
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{32}$
+          description: MD5-Hash als 32 Hex-Zeichen.
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setPasswordResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Core-Passworthash ändern (POST)
+      operationId: setPasswordPost
+      description: 'Ändert Zugangsdaten. Leerer Hash (MD5 von leerem Passwort) sperrt danach neue Nicht-Loopback-Verbindungen.
+        Nicht mit Beispielwerten ausführen.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - name: newpassword
+        in: query
+        required: false
+        description: Neuer MD5-Hash, 32 Hex-Zeichen. Kein Klartextpasswort. Setter speichert nicht explizit in settings.xml; persistierte Settings später prüfen.
+        schema:
+          type: string
+          pattern: ^[0-9a-fA-F]{32}$
+          description: MD5-Hash als 32 Hex-Zeichen.
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setPasswordResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                newpassword:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: Neuer MD5-Hash, 32 Hex-Zeichen. Kein Klartextpasswort. Setter speichert in diesem
+                    nicht explizit in settings.xml; persistierte Settings später prüfen.
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: setPasswordOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/setsettings:
+    get:
+      tags:
+      - function
+      summary: Core-Einstellungen ändern und speichern
+      operationId: setSettings
+      description: Alle Parameter optional, fehlende Werte bleiben. Reihenfolge der Auswertung (nickname,
+        port, xmlport, autoconnect, Upload-/Download-/Verbindungslimits, Quellen, maxnewconnectionsperturn,
+        speedperslot, Incoming, Temp, Shares). Kein atomarer Patch, kein Rollback. Anschließend settings.xml
+        lesen für tatsächlich gesetzte Werte. Änderungen an Ports/Verzeichnissen sind riskant und können Verbindung/Transfers
+        beeinflussen.
+      parameters:
+      - name: nickname
+        in: query
+        required: false
+        description: Neuer Nickname; leerer Wert wird ignoriert.
+        schema:
+          type: string
+      - name: port
+        in: query
+        required: false
+        description: TCP-Port ändern; Listener wird neu gestartet, Server-Neuverbindung kann nötig sein.
+        schema:
+          type: integer
+          format: int64
+      - name: xmlport
+        in: query
+        required: false
+        description: HTTP-Port ändern; Listener wird neu gestartet. Laufende Verbindung kann betroffen sein,
+          neue Requests an neuen Port.
+        schema:
+          type: integer
+          format: int64
+      - name: autoconnect
+        in: query
+        required: false
+        description: Case-insensitive true setzt true; jeder andere Wert setzt false. Setter ändert Flag, ruft
+          selbst kein startMonitoring auf.
+        schema:
+          type: string
+      - name: maxupload
+        in: query
+        required: false
+        description: Bytes/Sekunde; Mindestwert 3072. Ändert auch effektive speedperslot-Grenzen.
+        schema:
+          type: integer
+          format: int64
+      - name: maxdownload
+        in: query
+        required: false
+        description: Bytes/Sekunde; negative Werte werden 0 (unbegrenzt).
+        schema:
+          type: integer
+          format: int64
+      - name: maxconnections
+        in: query
+        required: false
+        description: Mindestwert 30.
+        schema:
+          type: integer
+          format: int64
+      - name: maxsourcesperfile
+        in: query
+        required: false
+        description: Ganzzahl, Setter übernimmt ohne Bereichsprüfung.
+        schema:
+          type: integer
+          format: int64
+      - name: maxnewconnectionsperturn
+        in: query
+        required: false
+        description: Je 10 s, wird auf 1..200 begrenzt.
+        schema:
+          type: integer
+          format: int64
+      - name: speedperslot
+        in: query
+        required: false
+        description: 'KiB/Sekunde. Effektiver Wert wird abhängig von maxupload begrenzt: gerundete Potenzen
+          0.2 und 0.6 von ganzzahlig maxupload/1024.'
+        schema:
+          type: integer
+          format: int64
+      - name: incomingdirectory
+        in: query
+        required: false
+        description: Incoming-Pfad; normalisiert, wird automatisch rekursiv geteilt. Änderung startet Share-Scan.
+        schema:
+          type: string
+      - name: temporarydirectory
+        in: query
+        required: false
+        description: Temporärpfad; wird nur geändert, wenn Downloadliste leer ist. Danach Partfiles laden.
+        schema:
+          type: string
+      - name: countshares
+        in: query
+        required: false
+        description: Löscht explizite Shareliste, fügt Incoming immer rekursiv hinzu, dann sharedirectoryN/sharesubN
+          absteigend von N bis 1. Auch 0/negative Werte löschen Liste bis auf Incoming. Danach Share-Scan.
+        schema:
+          type: integer
+          format: int64
+      - name: sharedirectory1
+        in: query
+        required: false
+        description: sharedirectory1..sharedirectoryN für countshares=N; nur zusammen mit jeweiligem sharesubX
+          ausgewertet.
+        schema:
+          type: string
+      - name: sharesub1
+        in: query
+        required: false
+        description: 'sharesub1..sharesubN: true (case-insensitive) rekursiv, sonst nur Verzeichnis.'
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setSettingsResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-indexed-parameters:
+        sharedirectory:
+          start: 1
+          end: countshares
+        sharesub:
+          start: 1
+          end: countshares
+    post:
+      tags:
+      - function
+      summary: Core-Einstellungen ändern und speichern (POST)
+      operationId: setSettingsPost
+      description: 'Alle Parameter optional, fehlende Werte bleiben. Reihenfolge der Auswertung (nickname,
+        port, xmlport, autoconnect, Upload-/Download-/Verbindungslimits, Quellen, maxnewconnectionsperturn,
+        speedperslot, Incoming, Temp, Shares). Kein atomarer Patch, kein Rollback. Anschließend settings.xml
+        lesen für tatsächlich gesetzte Werte. Änderungen an Ports/Verzeichnissen sind riskant und können Verbindung/Transfers
+        beeinflussen.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - name: nickname
+        in: query
+        required: false
+        description: Neuer Nickname; leerer Wert wird ignoriert.
+        schema:
+          type: string
+      - name: port
+        in: query
+        required: false
+        description: TCP-Port ändern; Listener wird neu gestartet, Server-Neuverbindung kann nötig sein.
+        schema:
+          type: integer
+          format: int64
+      - name: xmlport
+        in: query
+        required: false
+        description: HTTP-Port ändern; Listener wird neu gestartet. Laufende Verbindung kann betroffen sein,
+          neue Requests an neuen Port.
+        schema:
+          type: integer
+          format: int64
+      - name: autoconnect
+        in: query
+        required: false
+        description: Case-insensitive true setzt true; jeder andere Wert setzt false. Setter ändert Flag, ruft
+          selbst kein startMonitoring auf.
+        schema:
+          type: string
+      - name: maxupload
+        in: query
+        required: false
+        description: Bytes/Sekunde; Mindestwert 3072. Ändert auch effektive speedperslot-Grenzen.
+        schema:
+          type: integer
+          format: int64
+      - name: maxdownload
+        in: query
+        required: false
+        description: Bytes/Sekunde; negative Werte werden 0 (unbegrenzt).
+        schema:
+          type: integer
+          format: int64
+      - name: maxconnections
+        in: query
+        required: false
+        description: Mindestwert 30.
+        schema:
+          type: integer
+          format: int64
+      - name: maxsourcesperfile
+        in: query
+        required: false
+        description: Ganzzahl, Setter übernimmt ohne Bereichsprüfung.
+        schema:
+          type: integer
+          format: int64
+      - name: maxnewconnectionsperturn
+        in: query
+        required: false
+        description: Je 10 s, wird auf 1..200 begrenzt.
+        schema:
+          type: integer
+          format: int64
+      - name: speedperslot
+        in: query
+        required: false
+        description: 'KiB/Sekunde. Effektiver Wert wird abhängig von maxupload begrenzt: gerundete Potenzen
+          0.2 und 0.6 von ganzzahlig maxupload/1024.'
+        schema:
+          type: integer
+          format: int64
+      - name: incomingdirectory
+        in: query
+        required: false
+        description: Incoming-Pfad; normalisiert, wird automatisch rekursiv geteilt. Änderung startet Share-Scan.
+        schema:
+          type: string
+      - name: temporarydirectory
+        in: query
+        required: false
+        description: Temporärpfad; wird nur geändert, wenn Downloadliste leer ist. Danach Partfiles laden.
+        schema:
+          type: string
+      - name: countshares
+        in: query
+        required: false
+        description: Löscht explizite Shareliste, fügt Incoming immer rekursiv hinzu, dann sharedirectoryN/sharesubN
+          absteigend von N bis 1. Auch 0/negative Werte löschen Liste bis auf Incoming. Danach Share-Scan.
+        schema:
+          type: integer
+          format: int64
+      - name: sharedirectory1
+        in: query
+        required: false
+        description: sharedirectory1..sharedirectoryN für countshares=N; nur zusammen mit jeweiligem sharesubX
+          ausgewertet.
+        schema:
+          type: string
+      - name: sharesub1
+        in: query
+        required: false
+        description: 'sharesub1..sharesubN: true (case-insensitive) rekursiv, sonst nur Verzeichnis.'
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/setSettingsResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      x-core-indexed-parameters:
+        sharedirectory:
+          start: 1
+          end: countshares
+        sharesub:
+          start: 1
+          end: countshares
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                nickname:
+                  type: string
+                  description: Neuer Nickname; leerer Wert wird ignoriert.
+                port:
+                  type: integer
+                  format: int64
+                  description: TCP-Port ändern; Listener wird neu gestartet, Server-Neuverbindung kann nötig
+                    sein.
+                xmlport:
+                  type: integer
+                  format: int64
+                  description: HTTP-Port ändern; Listener wird neu gestartet. Laufende Verbindung kann betroffen
+                    sein, neue Requests an neuen Port.
+                autoconnect:
+                  type: string
+                  description: Case-insensitive true setzt true; jeder andere Wert setzt false. Setter ändert
+                    Flag, ruft selbst kein startMonitoring auf.
+                maxupload:
+                  type: integer
+                  format: int64
+                  description: Bytes/Sekunde; Mindestwert 3072. Ändert auch effektive speedperslot-Grenzen.
+                maxdownload:
+                  type: integer
+                  format: int64
+                  description: Bytes/Sekunde; negative Werte werden 0 (unbegrenzt).
+                maxconnections:
+                  type: integer
+                  format: int64
+                  description: Mindestwert 30.
+                maxsourcesperfile:
+                  type: integer
+                  format: int64
+                  description: Ganzzahl, Setter übernimmt ohne Bereichsprüfung.
+                maxnewconnectionsperturn:
+                  type: integer
+                  format: int64
+                  description: Je 10 s, wird auf 1..200 begrenzt.
+                speedperslot:
+                  type: integer
+                  format: int64
+                  description: 'KiB/Sekunde. Effektiver Wert wird abhängig von maxupload begrenzt: gerundete
+                    Potenzen 0.2 und 0.6 von ganzzahlig maxupload/1024.'
+                incomingdirectory:
+                  type: string
+                  description: Incoming-Pfad; normalisiert, wird automatisch rekursiv geteilt. Änderung startet
+                    Share-Scan.
+                temporarydirectory:
+                  type: string
+                  description: Temporärpfad; wird nur geändert, wenn Downloadliste leer ist. Danach Partfiles
+                    laden.
+                countshares:
+                  type: integer
+                  format: int64
+                  description: Löscht explizite Shareliste, fügt Incoming immer rekursiv hinzu, dann sharedirectoryN/sharesubN
+                    absteigend von N bis 1. Auch 0/negative Werte löschen Liste bis auf Incoming. Danach Share-Scan.
+                sharedirectory1:
+                  type: string
+                  description: sharedirectory1..sharedirectoryN für countshares=N; nur zusammen mit jeweiligem
+                    sharesubX ausgewertet.
+                sharesub1:
+                  type: string
+                  description: 'sharesub1..sharesubN: true (case-insensitive) rekursiv, sonst nur Verzeichnis.'
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+              additionalProperties:
+                type: string
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: setSettingsOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/sharecheck:
+    get:
+      tags:
+      - function
+      summary: Sharecheck starten
+      operationId: shareCheck
+      description: Startet den Sharecheck wie die Konsolenfunktion sharecheck. Share-Verzeichnisse werden asynchron auf neue Dateien geprüft, Hashes in 1-MB-Blöcken gelesen. ok bestätigt nur den Start, nicht das Ende.
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/shareCheckResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Sharecheck starten (POST)
+      operationId: shareCheckPost
+      description: 'Startet den Sharecheck wie die Konsolenfunktion sharecheck. Share-Verzeichnisse werden asynchron auf neue Dateien geprüft, Hashes in 1-MB-Blöcken gelesen. ok bestätigt nur den Start, nicht das Ende.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/shareCheckResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: shareCheckOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/stopsharecheck:
+    get:
+      tags:
+      - function
+      summary: Laufenden Sharecheck abbrechen
+      operationId: stopShareCheck
+      description: Unterbricht laufende Sharecheck-Threads wie die Konsolenfunktion stopsharecheck. Unfertig geprüfte Dateien werden bereinigt.
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/stopShareCheckResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Laufenden Sharecheck abbrechen (POST)
+      operationId: stopShareCheckPost
+      description: 'Unterbricht laufende Sharecheck-Threads wie die Konsolenfunktion stopsharecheck. Unfertig geprüfte Dateien werden bereinigt.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/stopShareCheckResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: stopShareCheckOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /function/exitcore:
+    get:
+      tags:
+      - function
+      summary: Core herunterfahren
+      operationId: exitCore
+      description: Beendet den Core und aktive Transfers. Nur mit ausdrücklichem Wunsch ausführen.
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/exitCoreResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+    post:
+      tags:
+      - function
+      summary: Core herunterfahren (POST)
+      operationId: exitCorePost
+      description: 'Beendet den Core und aktive Transfers. Nur mit ausdrücklichem Wunsch ausführen.
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/exitCoreResult'
+        '302':
+          $ref: '#/components/responses/Redirect'
+      x-core-form-password-supported: true
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+                password:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{32}$
+                  description: MD5 des Core-Passworts. POST-Formfeld alternativ zum Query-Parameter möglich;
+                    Query-apiKey beschreibt den empfohlenen Weg. Formwert überschreibt gleichnamigen Query-Wert.
+                    Kein Basic/Bearer/Cookie-Login.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: exitCoreOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /help:
+    get:
+      tags:
+      - http
+      summary: Historische HTML-Hilfe
+      operationId: help
+      description: Historische HTML-Hilfe
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/helpResult'
+      security: []
+    post:
+      tags:
+      - http
+      summary: Historische HTML-Hilfe (POST)
+      operationId: helpPost
+      description: 'Historische HTML-Hilfe
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/helpResult'
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: helpOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /wrongpassword:
+    get:
+      tags:
+      - http
+      summary: HTML-Seite für falsches Passwort
+      operationId: wrongpassword
+      description: HTML-Seite für falsches Passwort
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/wrongpasswordResult'
+      security: []
+    post:
+      tags:
+      - http
+      summary: HTML-Seite für falsches Passwort (POST)
+      operationId: wrongpasswordPost
+      description: 'HTML-Seite für falsches Passwort
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/wrongpasswordResult'
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: wrongpasswordOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+  /wrongsession:
+    get:
+      tags:
+      - http
+      summary: HTML-Seite für ungültige Session
+      operationId: wrongsession
+      description: HTML-Seite für ungültige Session
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/wrongsessionResult'
+      security: []
+    post:
+      tags:
+      - http
+      summary: HTML-Seite für ungültige Session (POST)
+      operationId: wrongsessionPost
+      description: 'HTML-Seite für ungültige Session
+
+        POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
+        application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/wrongsessionResult'
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+    options:
+      tags:
+      - http
+      summary: CORS-Preflight (ohne Authentifizierung)
+      operationId: wrongsessionOptions
+      description: OPTIONS wird vor Authentifizierung und Routing behandelt; gleiches Verhalten auch auf unbekannten
+        Pfaden. TCP-Zugangsbeschränkung gilt weiterhin.
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Mode'
+      responses:
+        '200':
+          $ref: '#/components/responses/Preflight'
+components:
+  securitySchemes:
+    PasswordHeader:
+      type: apiKey
+      in: header
+      name: X-AppleJuice-Password
+      description: MD5 des Core-Passworts. Empfohlener Transport; auch localhost braucht den Hash.
+        Vorhandener Header hat Vorrang vor Query und POST-Form, auch bei leerem oder falschem Wert.
+    PasswordQuery:
+      type: apiKey
+      in: query
+      name: password
+      description: MD5 des Core-Passworts. Kompatibler Fallback ohne X-AppleJuice-Password-Header;
+        auch localhost braucht den Hash; kein HTTP Basic/Bearer. POST alternativ Formfeld password akzeptiert.
+  parameters:
+    Mode:
+      name: mode
+      in: query
+      required: false
+      description: Nur case-insensitive zip aktiviert zlib; alle anderen Werte werden ignoriert.
+      schema:
+        type: string
+    Id:
+      name: id
+      in: query
+      required: false
+      description: 'Objekt-ID. Fehlend/ungültig: funktionsspezifischer Fehler oder ID 0/-1. Für erfolgreichen
+        Aufruf positive passende Objekt-ID verwenden.'
+      schema:
+        type: integer
+        format: int64
+    AdditionalIds:
+      name: id1
+      in: query
+      required: false
+      description: Fortlaufend id1, id2, ...; Stopp bei erster Lücke. Nicht Array id=1&id=2. Nichtnumerische
+        Werte werden übersprungen. Antworten werden ohne Trenner verkettet. id ist nicht zwingend, id1 allein
+        funktioniert.
+      schema:
+        type: integer
+        format: int64
+    Timestamp:
+      name: timestamp
+      in: query
+      required: false
+      description: Millisekunden seit Unix-Epoche; ungültig/fehlend = 0. Objekte mit Änderungszeit >= timestamp
+        (inklusiv). time der letzten Antwort beim nächsten Poll senden.
+      schema:
+        type: integer
+        format: int64
+        default: 0
+    Session:
+      name: session
+      in: query
+      required: false
+      description: Optional. Gültige Session-ID ersetzt ids durch removed. An IPv4-Adresse gebunden; Cleanup
+        alle 5 s bei >30 s ohne validierten Zugriff. Nichtnumerisch wird wie keine Session behandelt, unbekannte
+        numerische ID ergibt 302 /wrongsession. Nur modified.xml hält die Session am Leben.
+      schema:
+        type: integer
+        format: int64
+    Filter:
+      name: filter
+      in: query
+      required: false
+      description: 'Case-insensitive, durch Semikolon getrennt: ids, down, user, uploads, server, informations,
+        search. Fehlt filter, werden alle Kategorien geliefert; leer/unbekannt = nur time. informations (Plural!)
+        umfasst information und networkinfo; search auch searchentry. ids enthält Bestands- oder Löschlisten
+        unabhängig vom timestamp.'
+      schema:
+        type: string
+  responses:
+    Redirect:
+      description: '302 unknown mit leerem Körper. Fehlendes/falsches password: /wrongpassword. Unbekannter
+        Pfad: /help. Ungültige Session bei modified.xml: /wrongsession. Content-Type fehlt bei unkomprimiertem
+        Redirect.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+        location:
+          schema:
+            type: string
+            enum:
+            - /wrongpassword
+            - /wrongsession
+            - /help
+    Preflight:
+      description: 200, kein Passwort nötig. Ohne mode=zip leerer Körper; Content-Type text/plain. Mit mode=zip
+        leerer zlib-Stream, dennoch text/plain (früher Rücksprung vor Content-Type-Umschreibung).
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/plain:
+          schema:
+            type: string
+            format: binary
+    getInformationResult:
+      description: XML mit applejuice/generalinformation; immer version, filesystem, system.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            $ref: '#/components/schemas/GeneralInformation'
+          example:
+            generalinformation:
+              version: 0.35.185.1
+              filesystem:
+                seperator: /
+              system: Linux
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    getSessionResult:
+      description: XML mit Session-ID.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            $ref: '#/components/schemas/SessionResponse'
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    getDirectoryResult:
+      description: XML mit filesystem und null bis vielen dir-Elementen; ungültiges Verzeichnis ergibt meist
+        leere Liste.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            $ref: '#/components/schemas/DirectoryResponse'
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    getDownloadpartlistResult:
+      description: 'Erfolg als XML. ID muss ein Download bezeichnen. Fehlende/ungültige ID, falscher Typ oder
+        null liefert failure: <message>:<exception class> unter text/html. Bei Fehler nach bereits geschriebener
+        XML-Ausgabe kann der Körper teilweise XML + Klartext sein.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            oneOf:
+            - $ref: '#/components/schemas/PartListResponse'
+            - type: string
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: 'failure: <message>:<Ausnahmetyp>'
+    getUserpartlistResult:
+      description: 'Erfolg als XML. ID muss ein User bezeichnen. Fehlende/ungültige ID, falscher Typ oder null
+        liefert failure: <message>:<exception class> unter text/html. Bei Fehler nach bereits geschriebener
+        XML-Ausgabe kann der Körper teilweise XML + Klartext sein.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            oneOf:
+            - $ref: '#/components/schemas/PartListResponse'
+            - type: string
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: 'failure: <message>:<Ausnahmetyp>'
+    getObjectResult:
+      description: 'Objekt-XML oder Klartext error: invalid id (HTTP 200, text/xml).'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            oneOf:
+            - $ref: '#/components/schemas/ObjectResponse'
+            - type: string
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    getSharesResult:
+      description: applejuice/shares/share; leerer shares-Wrapper wenn keine Dateien.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            $ref: '#/components/schemas/ShareResponse'
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    getSettingsResult:
+      description: XML-Wurzel settings; kein applejuice-Wrapper und kein password.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            $ref: '#/components/schemas/SettingsResponse'
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    getModifiedResult:
+      description: 'XML mit time, optional ids/removed, gemischten Objekt-Geschwistern. Ungültige numerische
+        Session: 302 /wrongsession.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            $ref: '#/components/schemas/ModifiedResponse'
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    canceldownloadResult:
+      description: 'Bei jeder passenden ID Erfolgstext, sonst error: invalid id. Nichtnumerische IDs werden
+        ignoriert; ohne IDs leerer Körper mit text/xml. Mehrfachantworten werden ohne Trennzeichen verkettet
+        (z. B. okerror: invalid id).'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    pausedownloadResult:
+      description: 'Bei jeder passenden ID Erfolgstext, sonst error: invalid id. Nichtnumerische IDs werden
+        ignoriert; ohne IDs leerer Körper mit text/xml. Mehrfachantworten werden ohne Trennzeichen verkettet
+        (z. B. okerror: invalid id).'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    resumedownloadResult:
+      description: 'Bei jeder passenden ID Erfolgstext, sonst error: invalid id. Nichtnumerische IDs werden
+        ignoriert; ohne IDs leerer Körper mit text/xml. Mehrfachantworten werden ohne Trennzeichen verkettet
+        (z. B. okerror: invalid id).'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    renameDownloadResult:
+      description: 'ok, error: missing name oder error: invalid id. Name wird vor ID geprüft.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    setTargetDirResult:
+      description: 'ok, error: missing dir, error: invalid dir oder error: invalid id. dir vor ID geprüft.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    setPowerDownloadResult:
+      description: 'Je ID ok: set to <tatsächlich gesetzter Wert> oder error: invalid id. Fehlender/nichtnumerischer
+        powerdownload wird 0. Ungültiger numerischer Wert wird ignoriert; Antwort nennt alten Wert.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    setPriorityResult:
+      description: 'Je ID ok: set to <tatsächlich gesetzte Priorität> oder error: invalid id. Fehlende/nichtnumerische
+        priority wird 0 und damit ignoriert.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    cleanDownloadListResult:
+      description: ok; Downloads mit Status 13, 14 und 17 werden aus der Liste entfernt.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    cancelSearchResult:
+      description: 'ok oder error: invalid id.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    startSearchResult:
+      description: 'Fehlender/leerer Suchtext: failure. Sonst Standardkörper <html><body></body></html>. Kein
+        Search-ID-Rückgabewert; neue Suche über modified.xml ermitteln. Mit mode=zip zlib-Bytes, weiterhin
+        text/html.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: <html><body></body></html>
+    serverLoginResult:
+      description: 'Fehlende ID: failure. Parse-/Typ-/sonstige Ausnahme: failure: <message>. Sonst ok, auch
+        falls Lookup null ergibt und kein echter Login stattfindet. Mit mode=zip komprimiert, weiterhin text/html.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: ok
+    removeServerResult:
+      description: 'ok für Server-Objekt auch wenn aktuell verbunden/verbindend und deshalb nicht gelöscht;
+        sonst error: invalid id.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    processLinkResult:
+      description: 'Dateilink: ok bei neuem Download, already downloaded bei bestehendem Download. Serverlink:
+        Standard-HTML <html><body></body></html>, auch bei bereits vorhandenem Server. Fehlender link: failure:
+        link missing; unbekannter ajfsp-Typ oder ungültige Zahl: failure: incorrect link; Ausnahme: failure:
+        <class> :: <message>. Andere Präfixe wie https:// ergeben Standard-HTML, nicht explizit failure. Mit
+        mode=zip zlib-Bytes, weiterhin text/html.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: ok
+    setPasswordResult:
+      description: 'Fehlender newpassword: error: unknown password unter text/html (mit mode=zip komprimiert,
+        weiterhin text/html). Sonst text/xml: ok, error: invalid md5checksum oder error: <message> (<class>).
+        Authentifizierung noch mit altem password; danach neuen Hash verwenden.'
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: 'error: unknown password'
+    setSettingsResult:
+      description: ok unter text/html; mode=zip komprimiert, weiterhin text/html. Ungültige Ganzzahl führt
+        zu ungefangener Ausnahme und Verbindungsabbruch ohne reguläre HTTP-Antwort; vorherige Änderungen können
+        bereits angewendet sein. Settings-Speicherfehler werden nur geloggt und nicht als HTTP-Fehler zurückgegeben.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: ok
+    shareCheckResult:
+      description: Klartext ok unter text/xml, auch wenn bereits ein Sharecheck läuft. Fortschritt ist nicht abfragbar.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    stopShareCheckResult:
+      description: Klartext ok unter text/xml, auch wenn kein Sharecheck läuft. Der Core unterscheidet das nicht.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    exitCoreResult:
+      description: ok unter text/xml; danach wird exit ausgeführt und Prozess beendet. Bei Rennen kann Verbindung
+        auch vor vollständig gelesener Antwort enden.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/xml:
+          schema:
+            type: string
+          example: ok
+        application/zlib:
+          schema:
+            type: string
+            format: binary
+            description: zlib-Stream, kein ZIP-Archiv und kein gzip. Kein Content-Encoding-Header.
+    helpResult:
+      description: Öffentliche HTML-Seite, HTTP 200. mode=zip komprimiert auch hier, aber Content-Type bleibt
+        text/html; Beispiel gekürzt, historische Links sind kein aktueller Support-Verweis.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: <html><body><h2>Help</h2></body></html>
+    wrongpasswordResult:
+      description: Öffentliche HTML-Seite, HTTP 200. mode=zip komprimiert auch hier, aber Content-Type bleibt
+        text/html; Beispiel gekürzt, historische Links sind kein aktueller Support-Verweis.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: <html><body><p>wrong password. access denied.</p></body></html>
+    wrongsessionResult:
+      description: Öffentliche HTML-Seite, HTTP 200. mode=zip komprimiert auch hier, aber Content-Type bleibt
+        text/html; Beispiel gekürzt, historische Links sind kein aktueller Support-Verweis.
+      headers:
+        Access-Control-Allow-Origin:
+          $ref: '#/components/headers/Access-Control-Allow-Origin'
+        Access-Control-Allow-Methods:
+          $ref: '#/components/headers/Access-Control-Allow-Methods'
+        Access-Control-Allow-Headers:
+          $ref: '#/components/headers/Access-Control-Allow-Headers'
+        Server:
+          $ref: '#/components/headers/Server'
+        Content-Length:
+          $ref: '#/components/headers/Content-Length'
+      content:
+        text/html:
+          schema:
+            type: string
+            format: binary
+          example: <html><body><p>wrong session. access denied.</p></body></html>
+  schemas:
+    Filesystem:
+      type: object
+      xml:
+        name: filesystem
+      properties:
+        seperator:
+          type: string
+          description: Pfadtrenner. Historische Schreibweise `seperator` ist Teil der API.
+          xml:
+            attribute: true
+      required:
+      - seperator
+    GeneralInformation:
+      type: object
+      xml:
+        name: applejuice
+      properties:
+        generalinformation:
+          type: object
+          xml:
+            name: generalinformation
+          properties:
+            version:
+              type: string
+              description: Core-Version; nicht die Binärprotokoll-Version.
+            filesystem:
+              $ref: '#/components/schemas/Filesystem'
+            system:
+              type: string
+              description: Name des Betriebssystems (zum Beispiel Linux).
+          required:
+          - version
+          - filesystem
+          - system
+      required:
+      - generalinformation
+    SessionResponse:
+      type: object
+      xml:
+        name: applejuice
+      properties:
+        session:
+          type: object
+          xml:
+            name: session
+          properties:
+            id:
+              type: integer
+              format: int64
+              minimum: 1
+              description: Zufällig erzeugte, positive Session-ID; an IPv4-Adresse des Clients gebunden.
+              xml:
+                attribute: true
+          required:
+          - id
+      required:
+      - session
+    Directory:
+      type: object
+      xml:
+        name: dir
+      properties:
+        name:
+          type: string
+          description: Anzeigename; unter Unix ohne path aus Elternverzeichnis + Trenner zusammensetzen.
+          xml:
+            attribute: true
+        path:
+          type: string
+          description: Optionaler vollständiger oder Windows-Shell-Pfad. Kann fehlen.
+          xml:
+            attribute: true
+        isfilesystem:
+          type: boolean
+          xml:
+            attribute: true
+        type:
+          type: integer
+          format: int64
+          enum:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          description: 1 Rechner, 2 Laufwerk, 3 Diskettenlaufwerk, 4 Ordner, 5 Desktop.
+          xml:
+            attribute: true
+        dir:
+          type: array
+          xml:
+            name: dir
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Directory'
+      required:
+      - name
+      - isfilesystem
+      - type
+    DirectoryResponse:
+      type: object
+      xml:
+        name: applejuice
+      properties:
+        filesystem:
+          $ref: '#/components/schemas/Filesystem'
+        dir:
+          type: array
+          xml:
+            name: dir
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Directory'
+      description: Nur Verzeichnisse, keine Dateien. Unter Windows sind verschachtelte dir-Elemente möglich.
+      required:
+      - filesystem
+    Part:
+      type: object
+      xml:
+        name: part
+      properties:
+        fromposition:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Start in Bytes. Ende ist nächster Start oder filesize.
+          xml:
+            attribute: true
+        type:
+          type: integer
+          format: int64
+          minimum: -1
+          description: -1 lokal vorhanden; 0 unbekannt/nicht vorhanden; positive Zahl = bekannte Quellen. Der Zähler ist nicht auf 10 begrenzt. userpartlist liefert nur -1
+            oder 0.
+          xml:
+            attribute: true
+      required:
+      - fromposition
+      - type
+    PartListResponse:
+      type: object
+      xml:
+        name: applejuice
+      properties:
+        fileinformation:
+          type: object
+          xml:
+            name: fileinformation
+          properties:
+            filesize:
+              type: integer
+              format: int64
+              description: Bytezahl; als 64-Bit-Wert lesen, nicht auf 32 Bit begrenzen.
+              xml:
+                attribute: true
+          required:
+          - filesize
+        part:
+          type: array
+          xml:
+            name: part
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Part'
+      description: Stückweise Verfügbarkeitskarte; keine Liste einzelner fester Download-Blöcke.
+      required:
+      - fileinformation
+    Share:
+      type: object
+      xml:
+        name: share
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        filename:
+          type: string
+          description: Vollständiger Dateipfad im Core-Dateisystem.
+          xml:
+            attribute: true
+        shortfilename:
+          type: string
+          description: Dateiname ohne Pfad.
+          xml:
+            attribute: true
+        size:
+          type: integer
+          format: int64
+          description: Bytezahl; als 64-Bit-Wert lesen, nicht auf 32 Bit begrenzen.
+          xml:
+            attribute: true
+        checksum:
+          type: string
+          pattern: ^[0-9a-fA-F]{32}$
+          description: MD5-Hash als 32 Hex-Zeichen.
+          xml:
+            attribute: true
+        priority:
+          type: integer
+          format: int64
+          description: Share-Priorität 1..250; Gesamtpriorität darf beim Setzen 1000 nicht überschreiten.
+          xml:
+            attribute: true
+        lastasked:
+          type: integer
+          format: int64
+          description: Unix-Zeit in Millisekunden; 0 wenn noch nicht gesetzt.
+          xml:
+            attribute: true
+        askcount:
+          type: integer
+          format: int64
+          description: Anzahl der Anfragen.
+          xml:
+            attribute: true
+        searchcount:
+          type: integer
+          format: int64
+          description: Anzahl Suchtreffer.
+          xml:
+            attribute: true
+      required:
+      - id
+      - filename
+      - shortfilename
+      - size
+      - checksum
+      - priority
+      - lastasked
+      - askcount
+      - searchcount
+    ShareResponse:
+      type: object
+      xml:
+        name: applejuice
+      properties:
+        shares:
+          type: object
+          xml:
+            name: shares
+          properties:
+            share:
+              type: array
+              xml:
+                name: share
+                wrapped: false
+              items:
+                $ref: '#/components/schemas/Share'
+      required:
+      - shares
+    SettingsResponse:
+      type: object
+      xml:
+        name: settings
+      properties:
+        nick:
+          type: string
+          description: Nickname; Ausgabe heißt nick, Setter-Parameter nickname.
+        port:
+          type: integer
+          format: int64
+          description: Core-TCP-Port.
+        xmlport:
+          type: integer
+          format: int64
+          description: HTTP/XML-Port.
+        autoconnect:
+          type: boolean
+        maxupload:
+          type: integer
+          format: int64
+          description: Übertragungsrate in Bytes/Sekunde.
+        maxdownload:
+          type: integer
+          format: int64
+          description: Bytes/Sekunde; 0 = unbegrenzt.
+        maxconnections:
+          type: integer
+          format: int64
+          description: Maximale gleichzeitige Verbindungen.
+        maxsourcesperfile:
+          type: integer
+          format: int64
+          description: Maximale Quellen je Datei.
+        speedperslot:
+          type: integer
+          format: int64
+          description: Angepeilte Uploadgeschwindigkeit je Slot in KiB/Sekunde.
+        maxnewconnectionsperturn:
+          type: integer
+          format: int64
+          description: Maximale neue Verbindungen je 10 Sekunden.
+        incomingdirectory:
+          type: string
+          description: Incoming-Verzeichnis, im Core-Dateisystem.
+        temporarydirectory:
+          type: string
+          description: Temporäres Verzeichnis, im Core-Dateisystem.
+        share:
+          type: object
+          xml:
+            name: share
+          properties:
+            directory:
+              type: array
+              xml:
+                name: directory
+                wrapped: false
+              items:
+                type: object
+                xml:
+                  name: directory
+                properties:
+                  name:
+                    type: string
+                    description: Verzeichnispfad.
+                    xml:
+                      attribute: true
+                  sharemode:
+                    type: string
+                    enum:
+                    - subdirectory
+                    - singledirectory
+                    description: Mit bzw. ohne Unterverzeichnisse.
+                    xml:
+                      attribute: true
+                required:
+                - name
+                - sharemode
+      required:
+      - nick
+      - port
+      - xmlport
+      - autoconnect
+      - maxupload
+      - maxdownload
+      - maxconnections
+      - maxsourcesperfile
+      - speedperslot
+      - maxnewconnectionsperturn
+      - incomingdirectory
+      - temporarydirectory
+      - share
+      description: Eigene Wurzel settings, nicht applejuice. Das Passwort wird nicht ausgegeben.
+    Download:
+      type: object
+      xml:
+        name: download
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        shareid:
+          type: integer
+          format: int64
+          description: Share-ID, oder -1 solange noch kein Share besteht. Der Core legt ihn an, sobald Daten ankommen
+            (filename = Temp-Verzeichnis + temporaryfilenumber + .data, shortfilename = Downloadname) oder nutzt einen
+            vorhandenen Share mit gleichem Hash und gleicher Größe. Nach Abbruch ist der Wert wieder -1.
+          xml:
+            attribute: true
+        hash:
+          type: string
+          pattern: ^[0-9a-fA-F]{32}$
+          description: MD5-Hash als 32 Hex-Zeichen.
+          xml:
+            attribute: true
+        size:
+          type: integer
+          format: int64
+          description: Bytezahl; als 64-Bit-Wert lesen, nicht auf 32 Bit begrenzen.
+          xml:
+            attribute: true
+        status:
+          type: integer
+          format: int64
+          description: 'Codes: 0 suchen/laden, 1 zu wenig Platz, 12 fertigstellen, 13 Fehler beim Fertigstellen,
+            14 fertig, 15 abbrechen, 16 Datei erstellen, 17 abgebrochen, 18 pausiert. Weitere Werte nicht ausschließen.'
+          xml:
+            attribute: true
+        powerdownload:
+          type: integer
+          format: int64
+          description: 0 oder 12..490; 12 entspricht 1:2,2, 490 entspricht 1:50.
+          xml:
+            attribute: true
+        temporaryfilenumber:
+          type: integer
+          format: int64
+          description: Nummer der temporären Part-Datei.
+          xml:
+            attribute: true
+        filename:
+          type: string
+          xml:
+            attribute: true
+        targetdirectory:
+          type: string
+          description: Ziel relativ zu Incoming.
+          xml:
+            attribute: true
+        ready:
+          type: integer
+          format: int64
+          description: Bytezahl; als 64-Bit-Wert lesen, nicht auf 32 Bit begrenzen.
+          xml:
+            attribute: true
+      required:
+      - id
+      - shareid
+      - hash
+      - size
+      - status
+      - powerdownload
+      - temporaryfilenumber
+      - filename
+      - targetdirectory
+      - ready
+    User:
+      type: object
+      xml:
+        name: user
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        source:
+          type: integer
+          format: int64
+          description: 1 ajfsp, 2 Client-zu-Client, 3 Uploadliste, 4 letzter Start, 5 Textsuche, 6 Serversuche
+            (Codes).
+          xml:
+            attribute: true
+        downloadid:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        status:
+          type: integer
+          format: int64
+          description: 'Codes: 1 ungefragt, 2 verbinden, 3 alte Version, 4 Datei nicht öffnbar, 5 Warteschlange,
+            6 keine brauchbaren Parts, 7 Transfer, 8 kein Platz, 9 fertig, 11 keine Verbindung, 12 indirekt
+            versuchen, 13 pausiert, 14 Queue voll, 15 eigenes Limit, 16 indirekt abgelehnt.'
+          xml:
+            attribute: true
+        directstate:
+          type: integer
+          format: int64
+          description: 0 unbekannt, 1 direkt, 2 indirekt unbestätigt, 3 indirekt (Codes).
+          xml:
+            attribute: true
+        downloadfrom:
+          type: integer
+          format: int64
+          description: Byteposition im Objekt; -1 kann 'noch keine Position' bedeuten.
+          xml:
+            attribute: true
+        downloadto:
+          type: integer
+          format: int64
+          description: Byteposition im Objekt; -1 kann 'noch keine Position' bedeuten.
+          xml:
+            attribute: true
+        actualdownloadposition:
+          type: integer
+          format: int64
+          description: Byteposition im Objekt; -1 kann 'noch keine Position' bedeuten.
+          xml:
+            attribute: true
+        speed:
+          type: integer
+          format: int64
+          description: Übertragungsrate in Bytes/Sekunde.
+          xml:
+            attribute: true
+        version:
+          type: string
+          xml:
+            attribute: true
+        operatingsystem:
+          type: integer
+          format: int64
+          description: 'Codes: 0 unbekannt, 1 Windows, 2 Linux, 3 Macintosh, 4 Solaris, 5 OS/2, 6 FreeBSD,
+            7 NetWare.'
+          xml:
+            attribute: true
+        queueposition:
+          type: integer
+          format: int64
+          description: Position in Warteschlange.
+          xml:
+            attribute: true
+        powerdownload:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        filename:
+          type: string
+          xml:
+            attribute: true
+        nickname:
+          type: string
+          xml:
+            attribute: true
+      required:
+      - id
+      - source
+      - downloadid
+      - status
+      - directstate
+      - downloadfrom
+      - downloadto
+      - actualdownloadposition
+      - speed
+      - version
+      - operatingsystem
+      - queueposition
+      - powerdownload
+      - filename
+      - nickname
+    Upload:
+      type: object
+      xml:
+        name: upload
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        shareid:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        version:
+          type: string
+          xml:
+            attribute: true
+        operatingsystem:
+          type: integer
+          format: int64
+          description: Gleiche OS-Codes wie user.
+          xml:
+            attribute: true
+        status:
+          type: integer
+          format: int64
+          description: 'Codes: 1 aktive Übertragung, 2 Warteschlange.'
+          xml:
+            attribute: true
+        directstate:
+          type: integer
+          format: int64
+          description: 'Codes für Upload: 0 unbekannt, 1 direkt, 2 indirekt. Nicht mit User-Codes verwechseln.'
+          xml:
+            attribute: true
+        priority:
+          type: integer
+          format: int64
+          description: Vom Core berechnete Uploadpriorität; kein direkt setzbarer Share-Prioritätswert.
+          xml:
+            attribute: true
+        nick:
+          type: string
+          description: Anzeige-Nickname; heißt nick, nicht nickname.
+          xml:
+            attribute: true
+        uploadfrom:
+          type: integer
+          format: int64
+          description: Byteposition im Objekt; -1 kann 'noch keine Position' bedeuten.
+          xml:
+            attribute: true
+        actualuploadposition:
+          type: integer
+          format: int64
+          description: Byteposition im Objekt; -1 kann 'noch keine Position' bedeuten.
+          xml:
+            attribute: true
+        uploadto:
+          type: integer
+          format: int64
+          description: Byteposition im Objekt; -1 kann 'noch keine Position' bedeuten.
+          xml:
+            attribute: true
+        lastconnection:
+          type: integer
+          format: int64
+          description: Unix-Zeit in Millisekunden; 0 wenn noch nicht gesetzt.
+          xml:
+            attribute: true
+        speed:
+          type: integer
+          format: int64
+          description: Übertragungsrate in Bytes/Sekunde.
+          xml:
+            attribute: true
+        loaded:
+          type: number
+          format: double
+          description: Remote-Fortschritt in Prozent (0..100); -1.0, solange der Client keinen Wert gemeldet hat.
+          xml:
+            attribute: true
+      required:
+      - id
+      - shareid
+      - version
+      - operatingsystem
+      - status
+      - directstate
+      - priority
+      - nick
+      - uploadfrom
+      - actualuploadposition
+      - uploadto
+      - lastconnection
+      - speed
+      - loaded
+    Server:
+      type: object
+      xml:
+        name: server
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        name:
+          type: string
+          xml:
+            attribute: true
+        host:
+          type: string
+          xml:
+            attribute: true
+        lastseen:
+          type: integer
+          format: int64
+          description: Unix-Zeit in Millisekunden; 0 wenn noch nicht gesetzt.
+          xml:
+            attribute: true
+        port:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        connectiontry:
+          type: integer
+          format: int64
+          description: Anzahl der Verbindungsversuche.
+          xml:
+            attribute: true
+      required:
+      - id
+      - name
+      - host
+      - lastseen
+      - port
+      - connectiontry
+    Search:
+      type: object
+      xml:
+        name: search
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        searchtext:
+          type: string
+          description: Suchtext. Aktueller Core escaped diesen Attributwert nicht; Sonderzeichen können ungültiges
+            XML erzeugen.
+          xml:
+            attribute: true
+        opensearches:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        foundfiles:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        sumsearches:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        running:
+          type: boolean
+          xml:
+            attribute: true
+      required:
+      - id
+      - searchtext
+      - opensearches
+      - foundfiles
+      - sumsearches
+      - running
+    SearchEntry:
+      type: object
+      xml:
+        name: searchentry
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        searchid:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+        checksum:
+          type: string
+          pattern: ^[0-9a-fA-F]{32}$
+          description: MD5-Hash als 32 Hex-Zeichen.
+          xml:
+            attribute: true
+        size:
+          type: integer
+          format: int64
+          description: Bytezahl; als 64-Bit-Wert lesen, nicht auf 32 Bit begrenzen.
+          xml:
+            attribute: true
+        filename:
+          type: array
+          xml:
+            name: filename
+            wrapped: false
+          items:
+            type: object
+            xml:
+              name: filename
+            properties:
+              name:
+                type: string
+                xml:
+                  attribute: true
+              user:
+                type: integer
+                format: int64
+                description: Anzahl Quellen für genau diesen Namen; keine Objekt-ID.
+                xml:
+                  attribute: true
+            required:
+            - name
+            - user
+      required:
+      - id
+      - searchid
+      - checksum
+      - size
+    Information:
+      type: object
+      xml:
+        name: information
+      properties:
+        credits:
+          type: integer
+          format: int64
+          description: Aktuelle Credits in Bytes, vom Core auf ganzzahligen Dezimaltext gerundet.
+          xml:
+            attribute: true
+        sessionupload:
+          type: integer
+          format: int64
+          description: Bytezahl; als 64-Bit-Wert lesen, nicht auf 32 Bit begrenzen.
+          xml:
+            attribute: true
+        sessiondownload:
+          type: integer
+          format: int64
+          description: Bytezahl; als 64-Bit-Wert lesen, nicht auf 32 Bit begrenzen.
+          xml:
+            attribute: true
+        uploadspeed:
+          type: integer
+          format: int64
+          description: Übertragungsrate in Bytes/Sekunde.
+          xml:
+            attribute: true
+        downloadspeed:
+          type: integer
+          format: int64
+          description: Übertragungsrate in Bytes/Sekunde.
+          xml:
+            attribute: true
+        openconnections:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        maxuploadpositions:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+      required:
+      - credits
+      - sessionupload
+      - sessiondownload
+      - uploadspeed
+      - downloadspeed
+      - openconnections
+      - maxuploadpositions
+      description: Hat kein id-Attribut.
+    NetworkInfo:
+      type: object
+      xml:
+        name: networkinfo
+      properties:
+        users:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        files:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        filesize:
+          type: string
+          description: Gesamtgröße in GB, DecimalFormat 0.00 mit Laufzeit-Locale; Punkt oder Komma möglich.
+            Kein Bytewert.
+          xml:
+            attribute: true
+        firewalled:
+          type: boolean
+          xml:
+            attribute: true
+        ip:
+          type: string
+          description: Externe IPv4-Adresse, 0.0.0.0 wenn unbekannt.
+          xml:
+            attribute: true
+        tryconnecttoserver:
+          type: integer
+          format: int64
+          description: Server-ID des Verbindungsversuchs oder -1.
+          xml:
+            attribute: true
+        connectedwithserverid:
+          type: integer
+          format: int64
+          description: Verbundener Server oder -1.
+          xml:
+            attribute: true
+        connectedsince:
+          type: integer
+          format: int64
+          description: Unix-Zeit in Millisekunden; 0 wenn noch nicht gesetzt.
+          xml:
+            attribute: true
+        paused:
+          type: boolean
+          xml:
+            attribute: true
+        welcomemessage:
+          type: string
+          description: Server-Willkommenstext; kann umgebende Zeilenumbrüche enthalten.
+      required:
+      - users
+      - files
+      - filesize
+      - firewalled
+      - ip
+      - tryconnecttoserver
+      - connectedwithserverid
+      - connectedsince
+      - paused
+      - welcomemessage
+      description: Keine id. Enthält welcomemessage als XML-Textknoten (escaped).
+    IdRef:
+      type: object
+      xml:
+        name: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+      required:
+      - id
+    ServerId:
+      type: object
+      xml:
+        name: serverid
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+      required:
+      - id
+    UploadId:
+      type: object
+      xml:
+        name: uploadid
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+      required:
+      - id
+    UserId:
+      type: object
+      xml:
+        name: userid
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+          xml:
+            attribute: true
+      required:
+      - id
+    Ids:
+      type: object
+      xml:
+        name: ids
+      properties:
+        serverid:
+          type: array
+          xml:
+            name: serverid
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/ServerId'
+        uploadid:
+          type: array
+          xml:
+            name: uploadid
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/UploadId'
+        downloadid:
+          type: array
+          xml:
+            name: downloadid
+            wrapped: false
+          items:
+            type: object
+            xml:
+              name: downloadid
+            properties:
+              id:
+                type: integer
+                format: int64
+                description: Core-Objekt-ID; nur innerhalb dieser Core-Laufzeit gültig.
+                xml:
+                  attribute: true
+              userid:
+                type: array
+                xml:
+                  name: userid
+                  wrapped: false
+                items:
+                  $ref: '#/components/schemas/UserId'
+            required:
+            - id
+      description: Bestandslisten aller Server/Uploads/Downloads, unabhängig vom timestamp. Download-IDs enthalten
+        userid-Kinder. Keine Share-/Search-ID-Liste.
+    Removed:
+      type: object
+      xml:
+        name: removed
+      properties:
+        object:
+          type: array
+          xml:
+            name: object
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/IdRef'
+      description: Gelöschte Objekt-IDs seit letzter Abfrage dieser Session. Lesen leert die Liste; Reihenfolge
+        LIFO, keine Sortierung garantiert.
+    ObjectResponse:
+      type: object
+      xml:
+        name: applejuice
+      properties:
+        share:
+          $ref: '#/components/schemas/Share'
+        download:
+          $ref: '#/components/schemas/Download'
+        user:
+          $ref: '#/components/schemas/User'
+        upload:
+          $ref: '#/components/schemas/Upload'
+        server:
+          $ref: '#/components/schemas/Server'
+        search:
+          $ref: '#/components/schemas/Search'
+        searchentry:
+          $ref: '#/components/schemas/SearchEntry'
+        information:
+          $ref: '#/components/schemas/Information'
+        networkinfo:
+          $ref: '#/components/schemas/NetworkInfo'
+      description: 'Genau ein Objekt entsprechend der ID. Ungültige ID liefert stattdessen Klartext error:
+        invalid id.'
+      minProperties: 1
+      maxProperties: 1
+    ModifiedResponse:
+      type: object
+      xml:
+        name: applejuice
+      properties:
+        time:
+          type: integer
+          format: int64
+          description: Unix-Zeit in Millisekunden; 0 wenn noch nicht gesetzt.
+        ids:
+          $ref: '#/components/schemas/Ids'
+        removed:
+          $ref: '#/components/schemas/Removed'
+        download:
+          type: array
+          xml:
+            name: download
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Download'
+        user:
+          type: array
+          xml:
+            name: user
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/User'
+        upload:
+          type: array
+          xml:
+            name: upload
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Upload'
+        server:
+          type: array
+          xml:
+            name: server
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Server'
+        search:
+          type: array
+          xml:
+            name: search
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Search'
+        searchentry:
+          type: array
+          xml:
+            name: searchentry
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/SearchEntry'
+        information:
+          type: array
+          xml:
+            name: information
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/Information'
+        networkinfo:
+          type: array
+          xml:
+            name: networkinfo
+            wrapped: false
+          items:
+            $ref: '#/components/schemas/NetworkInfo'
+      description: Gemischte Geschwisterelemente in beliebiger Reihenfolge; keine äußeren downloads/users-Wrapper.
+        Shares werden nie ausgegeben. ids oder removed sind optional abhängig von filter und session.
+      required:
+      - time
+  headers:
+    Access-Control-Allow-Origin:
+      schema:
+        type: string
+        enum:
+        - '*'
+      description: Auch auf Auth-Redirects.
+    Access-Control-Allow-Methods:
+      schema:
+        type: string
+        enum:
+        - GET, POST, OPTIONS
+    Access-Control-Allow-Headers:
+      schema:
+        type: string
+        enum:
+        - '*'
+    Server:
+      schema:
+        type: string
+        enum:
+        - docage HTTP-Server (Java)
+    Content-Length:
+      schema:
+        type: integer
+        format: int64
+        description: Bytezahl des übertragenen (gegebenenfalls komprimierten) Körpers.
