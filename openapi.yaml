@@ -4001,7 +4001,7 @@ components:
         loaded:
           type: number
           format: double
-          description: Remote-Fortschritt in Prozent (0..100); -1.0, solange der Client keinen Wert gemeldet hat.
+          description: Remote-Fortschritt als Anteil (0.0..1.0); -1.0, solange der Client keinen Wert gemeldet hat.
           xml:
             attribute: true
       required:
