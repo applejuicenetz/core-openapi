@@ -3236,7 +3236,9 @@ components:
             format: binary
           example: 'error: unknown password'
     setSettingsResult:
-      description: ok unter text/html; mode=zip komprimiert, weiterhin text/html. Ungültige Ganzzahl führt
+      description: ok unter text/html; mode=zip komprimiert, weiterhin text/html. Ist ein neuer port oder xmlport
+        belegt, bleiben Listener und alter Port bestehen, die übrigen Einstellungen werden gespeichert und die
+        Antwort beginnt mit failure und nennt den Port. Ungültige Ganzzahl führt
         zu ungefangener Ausnahme und Verbindungsabbruch ohne reguläre HTTP-Antwort; vorherige Änderungen können
         bereits angewendet sein. Settings-Speicherfehler werden nur geloggt und nicht als HTTP-Fehler zurückgegeben.
       headers:
