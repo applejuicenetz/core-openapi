@@ -32,6 +32,14 @@ info:
     nutzen LF statt standardmäßiger CRLF. XML-Bytes nutzen den Standardzeichensatz der Laufzeit, Requestwerte UTF-8; typischerweise
     UTF-8, nicht durch XML-Deklaration/Content-Type erzwungen.
 
+    Anfragezeilen höchstens 8192 Bytes (sonst 414), einzelne Headerzeilen höchstens 8192 Bytes,
+    insgesamt höchstens 32768 Zeichen einschließlich gezählter Zeilenenden und 100 Headerfelder (sonst 431).
+    Content-Length und Transfer-Encoding dürfen nicht gemeinsam oder mehrfach vorkommen (400).
+    Unterstütztes Transfer-Encoding ist chunked; andere Kodierungen erhalten 501. Body-Limit 1 MiB (413).
+    Chunk-Trailer werden begrenzt eingelesen und verworfen. Expect 100-continue erhält vor dem Body eine
+    Zwischenantwort nach Prüfung von Framing und deklarierter Größe; andere Erwartungen erhalten 417.
+    Abgewiesene Anfragen schließen die Verbindung.
+
 
     mode=zip (case-insensitive): zlib-Stream, kein ZIP/gzip und kein Content-Encoding. Falls
     der Core Content-Type gesetzt hat, wird er zu application/zlib umgeschrieben, auch bei Klartext. Andernfalls
@@ -87,7 +95,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -150,7 +158,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -222,7 +230,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - name: directory
         in: query
@@ -294,7 +302,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/Mode'
@@ -362,7 +370,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/Mode'
@@ -434,7 +442,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/Mode'
@@ -503,7 +511,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -564,7 +572,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -638,7 +646,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Timestamp'
       - $ref: '#/components/parameters/Session'
@@ -727,7 +735,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/AdditionalIds'
@@ -813,7 +821,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/AdditionalIds'
@@ -899,7 +907,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/AdditionalIds'
@@ -986,7 +994,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - name: name
@@ -1070,7 +1078,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - name: dir
@@ -1162,7 +1170,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - name: powerdownload
@@ -1269,7 +1277,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - name: priority
@@ -1364,7 +1372,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -1427,7 +1435,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/Mode'
@@ -1500,7 +1508,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - name: search
         in: query
@@ -1573,7 +1581,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/Mode'
@@ -1641,7 +1649,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Id'
       - $ref: '#/components/parameters/Mode'
@@ -1723,7 +1731,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - name: link
         in: query
@@ -1818,7 +1826,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - name: newpassword
         in: query
@@ -2011,7 +2019,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - name: nickname
         in: query
@@ -2247,7 +2255,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -2308,7 +2316,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -2369,7 +2377,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -2429,7 +2437,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -2481,7 +2489,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
@@ -2533,7 +2541,7 @@ paths:
 
         POST akzeptiert dieselben Query-Parameter wie GET. Zusätzlich optionaler Formkörper; Header muss exakt
         application/x-www-form-urlencoded sein (case-insensitive, ohne charset). Formwerte überschreiben Query-Werte.
-        JSON/Multipart/andere Typen werden nicht ausgewertet. Nur Content-Length-Body, kein Chunked-Encoding.'
+        JSON/Multipart/andere Typen werden nicht ausgewertet. Content-Length- und Chunked-Bodies werden unterstützt (höchstens 1 MiB).'
       parameters:
       - $ref: '#/components/parameters/Mode'
       responses:
