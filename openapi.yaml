@@ -4243,8 +4243,8 @@ components:
             attribute: true
         filesize:
           type: string
-          description: Gesamtgröße in GB, DecimalFormat 0.00 mit Laufzeit-Locale; Punkt oder Komma möglich.
-            Kein Bytewert.
+          description: Gesamtgröße in MiB (Byte / 1048576), DecimalFormat 0.00 mit Laufzeit-Locale; Punkt oder
+            Komma möglich. Kein Bytewert.
           xml:
             attribute: true
         firewalled:
